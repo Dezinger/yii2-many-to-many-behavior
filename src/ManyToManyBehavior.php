@@ -92,6 +92,39 @@ class ManyToManyBehavior extends Behavior
         }
     }
 
+    
+    
+    /**
+     * Return Primary Key value
+     * even for composite keys
+     * 
+     * @param string $attributeName
+     * @return int
+     * @throws ErrorException
+     */
+    public function getOwnerPrimaryKey($attributeName)
+    {
+        $primaryModelPk = $this->owner->getPrimaryKey();
+
+        if (is_array($primaryModelPk)) { 
+            $params = $this->getRelationParams($attributeName);
+
+            if (!isset($params['ppk'])) {
+                throw new ErrorException("For usage composite key setup 'ppk' param key name one of them for each relations");
+            }
+
+            if (!isset($primaryModelPk[$params['ppk']])) {
+                throw new ErrorException("'{$params['ppk']}' key not found in this primary model");
+            }
+
+            $primaryModelPk = $primaryModelPk[$params['ppk']];
+        }
+        
+        return $primaryModelPk;
+    }
+
+    
+
     /**
      * Save all dirty (changed) relation values ($this->_values) to the database
      * @throws ErrorException
@@ -101,10 +134,6 @@ class ManyToManyBehavior extends Behavior
     {
         /** @var ActiveRecord $primaryModel */
         $primaryModel = $this->owner;
-
-        if (is_array($primaryModelPk = $primaryModel->getPrimaryKey())) {
-            throw new ErrorException('This behavior does not support composite primary keys');
-        }
 
         foreach ($this->relations as $attributeName => $params) {
             $relationName = $this->getRelationName($attributeName);
@@ -135,7 +164,7 @@ class ManyToManyBehavior extends Behavior
     {
         /** @var ActiveRecord $primaryModel */
         $primaryModel = $this->owner;
-        $primaryModelPk = $primaryModel->getPrimaryKey();
+        $primaryModelPk = $this->getOwnerPrimaryKey($attributeName);
 
         $bindingKeys = $this->getNewValue($attributeName);
 
@@ -210,7 +239,7 @@ class ManyToManyBehavior extends Behavior
     {
         /** @var ActiveRecord $primaryModel */
         $primaryModel = $this->owner;
-        $primaryModelPk = $primaryModel->getPrimaryKey();
+        $primaryModelPk = $this->getOwnerPrimaryKey($attributeName);
 
         $bindingKeys = $this->getNewValue($attributeName);
 
@@ -448,7 +477,22 @@ class ManyToManyBehavior extends Behavior
 
             /** @var ActiveRecord $foreignModel */
             $foreignModel = new $relation->modelClass();
-            $value = $relation->select($foreignModel->getPrimaryKey())->column();
+            
+            $pk = $foreignModel->getPrimaryKey();
+            if (is_array($pk)) {
+                $params = $this->getRelationParams($attributeName);
+                if (!isset($params['fpk'])) {
+                    throw new ErrorException("For usage composite key setup 'fpk' param key name one of them for each relations");
+                }
+                
+                if (!isset($pk[$params['fpk']])) {
+                    throw new ErrorException("'{$params['fpk']}' key not found in foreign model");
+                }
+
+                $pk = $params['fpk'];
+            }
+
+            $value = $relation->select($pk)->column();
         }
 
         if (empty($fieldParams['get'])) {
